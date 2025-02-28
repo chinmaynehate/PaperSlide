@@ -4,24 +4,24 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { FileUp, Loader2 } from "lucide-react"
+import { FileUp } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { DashboardShell } from "@/components/dashboard/dashboard-shell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
 
+const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+
 export default function UploadPage() {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [isProcessing, setIsProcessing] = useState(false)
   const [template, setTemplate] = useState("basic")
   const [detailLevel, setDetailLevel] = useState(50)
 
@@ -35,31 +35,33 @@ export default function UploadPage() {
     if (!file) return
 
     setIsUploading(true)
+    setUploadProgress(0)
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          return 100
-        }
-        return prev + 5
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("template", template)
+    formData.append("detailLevel", detailLevel.toString())
+
+    try {
+      const response = await fetch(`${baseUrl}/upload`, {
+        method: "POST",
+        body: formData,
+        // Include auth headers if needed
+        // headers: { Authorization: `Bearer ${token}` }
       })
-    }, 100)
 
-    // Simulate upload completion
-    setTimeout(() => {
-      clearInterval(interval)
-      setUploadProgress(100)
+      if (!response.ok) {
+        throw new Error("Upload failed")
+      }
+
+      // Handle successful upload
+      router.push("/dashboard/preview")
+    } catch (error) {
+      console.error("Error uploading file:", error)
+      // Handle error (e.g., show error message to user)
+    } finally {
       setIsUploading(false)
-      setIsProcessing(true)
-
-      // Simulate processing time
-      setTimeout(() => {
-        setIsProcessing(false)
-        router.push("/dashboard/preview")
-      }, 2000)
-    }, 2000)
+    }
   }
 
   return (
@@ -75,50 +77,20 @@ export default function UploadPage() {
             <CardDescription>Upload your research paper in PDF or DOCX format</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="upload">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="upload">Upload File</TabsTrigger>
-                <TabsTrigger value="url">URL</TabsTrigger>
-              </TabsList>
-              <TabsContent value="upload" className="mt-4">
-                <div className="flex flex-col items-center justify-center space-y-2 rounded-lg border border-dashed border-gray-300 p-10">
-                  <FileUp className="h-10 w-10 text-gray-400" />
-                  <p className="text-sm text-gray-500">Drag and drop your file here or click to browse</p>
-                  <input
-                    type="file"
-                    accept=".pdf,.docx"
-                    className="hidden"
-                    id="file-upload"
-                    onChange={handleFileChange}
-                  />
-                  <label htmlFor="file-upload">
-                    <Button
-                      variant="outline"
-                      className="cursor-pointer"
-                      onClick={() => document.getElementById("file-upload")?.click()}
-                    >
-                      Select File
-                    </Button>
-                  </label>
-                </div>
-              </TabsContent>
-              <TabsContent value="url" className="mt-4">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="paper-url">Paper URL</Label>
-                    <div className="flex gap-2">
-                      <input
-                        id="paper-url"
-                        type="url"
-                        placeholder="https://example.com/paper.pdf"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                      <Button variant="outline">Fetch</Button>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+            <div className="flex flex-col items-center justify-center space-y-2 rounded-lg border border-dashed border-gray-300 p-10">
+              <FileUp className="h-10 w-10 text-gray-400" />
+              <p className="text-sm text-gray-500">Drag and drop your file here or click to browse</p>
+              <input type="file" accept=".pdf,.docx" className="hidden" id="file-upload" onChange={handleFileChange} />
+              <label htmlFor="file-upload">
+                <Button
+                  variant="outline"
+                  className="cursor-pointer"
+                  onClick={() => document.getElementById("file-upload")?.click()}
+                >
+                  Select File
+                </Button>
+              </label>
+            </div>
             {file && (
               <div className="mt-4 rounded-lg border border-gray-200 p-4">
                 <p className="font-medium">{file.name}</p>
@@ -132,12 +104,6 @@ export default function UploadPage() {
                   <span className="text-sm font-medium">{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2 w-full" />
-              </div>
-            )}
-            {isProcessing && (
-              <div className="mt-4 flex items-center justify-center space-x-2 rounded-lg border border-gray-200 p-4">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                <span className="text-sm font-medium">Processing your paper...</span>
               </div>
             )}
           </CardContent>
@@ -179,25 +145,10 @@ export default function UploadPage() {
                 <span>Detailed</span>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="language">Language</Label>
-              <Select defaultValue="en">
-                <SelectTrigger id="language">
-                  <SelectValue placeholder="Select language" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="es">Spanish</SelectItem>
-                  <SelectItem value="fr">French</SelectItem>
-                  <SelectItem value="de">German</SelectItem>
-                  <SelectItem value="zh">Chinese</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </CardContent>
           <CardFooter>
-            <Button className="w-full" onClick={handleUpload} disabled={!file || isUploading || isProcessing}>
-              {isUploading ? "Uploading..." : isProcessing ? "Processing..." : "Generate Presentation"}
+            <Button className="w-full" onClick={handleUpload} disabled={!file || isUploading}>
+              {isUploading ? "Uploading..." : "Generate Presentation"}
             </Button>
           </CardFooter>
         </Card>
